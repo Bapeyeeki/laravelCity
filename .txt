@@ -1,5 +1,5 @@
-// resources/js/components/QuizPolska.vue
 
+///////////
 <template>
   <div class="quiz-polska" :class="{ 'dark': isDarkMode }">
     <button id="toggleTheme" @click="toggleTheme">
@@ -8,14 +8,9 @@
 
     <h1>Jak dużo Polskich miast potrafisz nazwać?</h1>
 
-    <div v-if="errorMessage" class="error-message">
-      {{ errorMessage }}
-    </div>
-
     <input 
       id="city-input" 
       v-model="cityInput" 
-      @keyup.enter="checkCity"
       type="text" 
       class="city-input" 
       placeholder="Podaj nazwę miasta..." 
@@ -27,8 +22,9 @@
     <div class="map-container">
       <div id="city-dots-container">
         <img src="/public/POL_location_map.svg" alt="Mapa Polski" id="map">
+        <!-- Punkty miast będą generowane dynamicznie -->
         <div 
-          v-for="(city, index) in foundCities" 
+          v-for="(city, index) in cities" 
           :key="index"
           class="city-dot"
           :style="getDotStyle(city)"
@@ -72,16 +68,17 @@
 </template>
 
 <script>
-import axios from 'axios';
-
 export default {
   name: 'QuizPolska',
   data() {
     return {
       isDarkMode: false,
       cityInput: '',
-      foundCities: [],
-      allCities: [],
+      cities: [
+        // Przykładowe dane miast dla celów demonstracyjnych
+        { city: 'Warszawa', lat: 52.2297, lng: 21.0122, populatio: 1793579 },
+        { city: 'Kraków', lat: 50.0647, lng: 19.9450, populatio: 779115 }
+      ],
       tooltip: {
         visible: false,
         text: '',
@@ -90,16 +87,19 @@ export default {
       },
       totalPolandPopulation: 38386000,
       showEndScreen: false,
-      missedCities: [],
-      errorMessage: ''
+      missedCities: [
+        { city: 'Łódź', populatio: 682679 },
+        { city: 'Wrocław', populatio: 641928 },
+        { city: 'Poznań', populatio: 534813 }
+      ]
     }
   },
   computed: {
     cityCount() {
-      return this.foundCities.length;
+      return this.cities.length;
     },
     totalPopulation() {
-      return this.foundCities.reduce((sum, city) => sum + city.populatio, 0);
+      return this.cities.reduce((sum, city) => sum + city.populatio, 0);
     },
     populationPercent() {
       return ((this.totalPopulation / this.totalPolandPopulation) * 100).toFixed(2);
@@ -110,54 +110,6 @@ export default {
       this.isDarkMode = !this.isDarkMode;
       localStorage.setItem('theme', this.isDarkMode ? 'dark' : 'light');
     },
-    
-    // Pobieranie danych z API Laravela
-    async fetchAllCities() {
-      try {
-        const response = await axios.get('/api/cities');
-        this.allCities = response.data;
-      } catch (error) {
-        this.errorMessage = `Błąd pobierania miast: ${error.message}`;
-        console.error('Błąd pobierania miast:', error);
-      }
-    },
-    
-    async findCity(cityName) {
-      try {
-        const response = await axios.get(`/api/cities/${encodeURIComponent(cityName)}`);
-        return response.data;
-      } catch (error) {
-        if (error.response && error.response.status === 404) {
-          // Miasto nie znalezione - to jest normalny przypadek
-          return null;
-        }
-        this.errorMessage = `Błąd wyszukiwania miasta: ${error.message}`;
-        console.error('Błąd wyszukiwania miasta:', error);
-        return null;
-      }
-    },
-    
-    async checkCity() {
-      if (!this.cityInput.trim()) return;
-      
-      // Sprawdź czy miasto już zostało znalezione
-      const alreadyFound = this.foundCities.some(
-        city => city.city.toLowerCase() === this.cityInput.trim().toLowerCase()
-      );
-      
-      if (alreadyFound) {
-        this.cityInput = '';
-        return;
-      }
-      
-      const city = await this.findCity(this.cityInput.trim());
-      
-      if (city) {
-        this.foundCities.push(city);
-        this.cityInput = '';
-      }
-    },
-    
     // Konwersja współrzędnych geograficznych na współrzędne mapy
     geoToMapCoords(lat, lon) {
       const map = document.getElementById('map');
@@ -179,7 +131,6 @@ export default {
 
       return { x, y };
     },
-    
     getDotStyle(city) {
       const { x, y } = this.geoToMapCoords(city.lat, city.lng);
       const dotSize = Math.max(10, Math.min(24, city.populatio / 40000));
@@ -192,18 +143,15 @@ export default {
         zIndex: `${1000 - Math.round(dotSize)}`
       };
     },
-    
     showTooltip(event, city) {
       this.tooltip.text = `${city.city} – ${this.formatNumber(city.populatio)} mieszkańców`;
       this.tooltip.x = event.pageX + 10;
       this.tooltip.y = event.pageY - 30;
       this.tooltip.visible = true;
     },
-    
     hideTooltip() {
       this.tooltip.visible = false;
     },
-    
     getCityWordForm(count) {
       const lastDigit = count % 10;
       const lastTwoDigits = count % 100;
@@ -214,65 +162,22 @@ export default {
       }
       return 'miast';
     },
-    
     formatNumber(number) {
       return number.toLocaleString();
     },
-    
     clearGame() {
-      this.foundCities = [];
+      this.cities = [];
       this.showEndScreen = false;
     },
-    
     finishGame() {
-      // Oblicz miasta, których nie odgadliśmy
-      this.missedCities = this.allCities.filter(city => 
-        !this.foundCities.some(foundCity => 
-          foundCity.city.toLowerCase() === city.city.toLowerCase()
-        )
-      );
       this.showEndScreen = true;
-      
-      // Jeśli chcemy zapisać wynik, możemy to zrobić tutaj
-      this.saveGameResult();
     },
-    
-    async saveGameResult() {
-      // Pomiń zapisywanie, jeśli nie ma znalezionych miast
-      if (this.foundCities.length === 0) return;
-      
-      try {
-        const playerName = localStorage.getItem('playerName') || 'Anonimowy';
-        
-        const result = {
-          playerName: playerName,
-          foundCities: this.cityCount,
-          totalPopulation: this.totalPopulation,
-          score: Math.round(this.totalPopulation / 10000) // Przykładowy sposób obliczania wyniku
-        };
-        
-        await axios.post('/api/game-results', result);
-      } catch (error) {
-        console.error('Błąd podczas zapisywania wyniku:', error);
-      }
-    },
-    
     restartGame() {
       this.clearGame();
-      this.fetchAllCities();
-    },
-    
-    // Zapisywanie wyników gry w localStorage
-    saveGameState() {
-      localStorage.setItem('quizPolska_foundCities', JSON.stringify(this.foundCities));
-    },
-    
-    // Wczytywanie zapisanego stanu gry
-    loadGameState() {
-      const savedCities = localStorage.getItem('quizPolska_foundCities');
-      if (savedCities) {
-        this.foundCities = JSON.parse(savedCities);
-      }
+      this.cities = [
+        { city: 'Warszawa', lat: 52.2297, lng: 21.0122, populatio: 1793579 },
+        { city: 'Kraków', lat: 50.0647, lng: 19.9450, populatio: 779115 }
+      ];
     }
   },
   mounted() {
@@ -280,24 +185,11 @@ export default {
     const savedTheme = localStorage.getItem('theme') || 'light';
     this.isDarkMode = savedTheme === 'dark';
     
-    // Pobierz wszystkie miasta przy uruchomieniu
-    this.fetchAllCities();
-    
-    // Wczytaj zapisany stan gry
-    this.loadGameState();
-    
-    // Zapisuj stan gry co 30 sekund
-    this.autoSaveInterval = setInterval(() => {
-      this.saveGameState();
-    }, 30000);
-    
     // Obsługa zmiany rozmiaru okna
     window.addEventListener('resize', () => this.$forceUpdate());
   },
   beforeUnmount() {
     window.removeEventListener('resize', () => this.$forceUpdate());
-    clearInterval(this.autoSaveInterval);
-    this.saveGameState(); // Zapisz stan przy zamknięciu
   }
 }
 </script>
@@ -348,11 +240,6 @@ h1 {
   background-color: #2c2c2c;
   border: 1px solid #ecf0f1;
   color: #ecf0f1;
-}
-
-.error-message {
-  color: #e74c3c;
-  margin: 10px 0;
 }
 
 #toggleTheme {
