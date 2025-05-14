@@ -1,12 +1,10 @@
-// resources/js/components/QuizPolska.vue
-
 <template>
   <div class="quiz-polska" :class="{ 'dark': isDarkMode }">
     <button id="toggleTheme" @click="toggleTheme">
       {{ isDarkMode ? 'Tryb jasny' : 'Tryb ciemny' }}
     </button>
 
-    <h1>Jak dużo Polskich miast potrafisz nazwać?</h1>
+    <h1><b>Jak dużo Polskich miast potrafisz nazwać?</b></h1>
 
     <div v-if="errorMessage" class="error-message">
       {{ errorMessage }}
@@ -117,8 +115,7 @@ export default {
         const response = await axios.get('/api/cities');
         this.allCities = response.data;
       } catch (error) {
-        this.errorMessage = `Błąd pobierania miast: ${error.message}`;
-        console.error('Błąd pobierania miast:', error);
+          console.error('Błąd pobierania miast:', error);
       }
     },
     
@@ -303,6 +300,19 @@ export default {
 </script>
 
 <style>
+/* Reset CSS dla usunięcia białego paska */
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  padding: 0;
+  overflow-x: hidden;
+}
+
 .quiz-polska {
   font-family: Arial, sans-serif;
   background-color: #f4f4f4;
@@ -310,6 +320,8 @@ export default {
   text-align: center;
   min-height: 100vh;
   padding-bottom: 40px;
+  margin-top: 0;
+  padding-top: 20px;
 }
 
 .quiz-polska.dark {
@@ -318,7 +330,7 @@ export default {
 }
 
 h1 {
-  margin-top: 20px;
+  margin-top: 0;
   font-size: 24px;
   color: #333;
   padding: 0 20px;
