@@ -1,7 +1,3 @@
-<<<<<<< HEAD
-import './bootstrap';
-//
-=======
 import { createApp, h } from 'vue';
 import { createInertiaApp } from '@inertiajs/vue3';
 import { InertiaProgress } from '@inertiajs/progress';
@@ -15,4 +11,4 @@ createInertiaApp({
 });
 
 InertiaProgress.init();
->>>>>>> 8f0c9ba (poprawki)
+
