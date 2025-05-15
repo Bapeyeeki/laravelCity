@@ -90,8 +90,6 @@ export default {
       showEndScreen: false,
       missedCities: [],
       errorMessage: '',
-      enterKeyListener: null,
-      resizeListener: null,
       autoSaveInterval: null,
     }
   },
@@ -100,7 +98,7 @@ export default {
       return this.foundCities.length;
     },
     totalPopulation() {
-      return this.foundCities.reduce((sum, city) => sum + (city.population || city.populatio || 0), 0);
+      return this.foundCities.reduce((sum, city) => sum + (city.population || 0), 0);
     },
     populationPercent() {
       return ((this.totalPopulation / this.totalPolandPopulation) * 100).toFixed(2);
@@ -166,7 +164,7 @@ export default {
     },
     getDotStyle(city) {
       const { x, y } = this.geoToMapCoords(city.lat, city.lng);
-      const population = city.population || city.populatio || 0;
+      const population = city.population || 0;
       const dotSize = Math.max(10, Math.min(24, population / 40000));
       return {
         width: `${dotSize}px`,
@@ -177,7 +175,7 @@ export default {
       };
     },
     showTooltip(event, city) {
-      const population = city.population || city.populatio || 0;
+      const population = city.population || 0;
       this.tooltip.text = `${city.city} – ${this.formatNumber(population)} mieszkańców`;
       this.tooltip.x = event.pageX + 10;
       this.tooltip.y = event.pageY - 30;
@@ -202,6 +200,7 @@ export default {
       this.foundCities = [];
       this.showEndScreen = false;
       this.errorMessage = '';
+      this.saveGameState();
     },
     finishGame() {
       this.missedCities = this.allCities.filter(city => 
@@ -253,35 +252,14 @@ export default {
     // Wczytanie stanu gry
     this.loadGameState();
 
-    // Event listener dla Enter (definiujemy funkcję raz)
-    this.enterKeyListener = (e) => {
-      if (e.key === 'Enter') {
-        this.checkCity();
-      }
-    };
-    document.addEventListener('keypress', this.enterKeyListener);
-
-    // Event listener dla resize
-    this.resizeListener = () => this.$forceUpdate();
-    window.addEventListener('resize', this.resizeListener);
-
     // Automatyczne zapisywanie stanu gry co 30 sekund
     this.autoSaveInterval = setInterval(() => {
       this.saveGameState();
     }, 30000);
   },
   beforeUnmount() {
-    // Usuwanie event listenerów
-    if (this.enterKeyListener) {
-      document.removeEventListener('keypress', this.enterKeyListener);
-    }
-    if (this.resizeListener) {
-      window.removeEventListener('resize', this.resizeListener);
-    }
-    clearInterval(this.autoSaveInterval
-
-);
-}
+    clearInterval(this.autoSaveInterval);
+  }
 };
 </script>
 

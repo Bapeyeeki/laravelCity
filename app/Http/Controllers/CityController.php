@@ -7,38 +7,34 @@ use Illuminate\Http\Request;
 
 class CityController extends Controller
 {
-    /**
-     * Zwraca wszystkie miasta jako JSON.
-     *
-     * @return \Illuminate\Http\JsonResponse
-     */
+    // Funkcja do usuwania polskich znaków
+    private function removePolishChars($string)
+    {
+        $polish = ['ą','ć','ę','ł','ń','ó','ś','ź','ż','Ą','Ć','Ę','Ł','Ń','Ó','Ś','Ź','Ż'];
+        $english = ['a','c','e','l','n','o','s','z','z','A','C','E','L','N','O','S','Z','Z'];
+        return str_replace($polish, $english, $string);
+    }
+
     public function index()
     {
-        // Pobiera wszystkie rekordy z tabeli cities
         $cities = City::all();
-
-        // Zwraca je jako JSON
         return response()->json($cities);
     }
 
-    /**
-     * Zwraca dane miasta na podstawie nazwy (case insensitive).
-     *
-     * @param  string  $name
-     * @return \Illuminate\Http\JsonResponse
-     */
     public function show($cityName)
-{
-    // Normalizuj nazwę miasta np. na małe litery
-    $cityName = strtolower($cityName);
+    {
+        $cityNameNormalized = strtolower($this->removePolishChars($cityName));
 
-    // Szukaj miasta w bazie (przykład)
-    $city = City::whereRaw('LOWER(city) = ?', [$cityName])->first();
+        // Pobieramy wszystkie miasta i szukamy po znormalizowanej nazwie
+        $city = City::all()->first(function ($city) use ($cityNameNormalized) {
+            $dbCityNormalized = strtolower($this->removePolishChars($city->city));
+            return $dbCityNormalized === $cityNameNormalized;
+        });
 
-    if (!$city) {
-        return response()->json(['message' => 'Miasto nie znalezione'], 404);
+        if (!$city) {
+            return response()->json(['message' => 'Miasto nie znalezione'], 404);
+        }
+
+        return response()->json($city);
     }
-
-    return response()->json($city);
-}
 }
