@@ -61,7 +61,7 @@
       <h2>Miasta, których nie odgadłeś:</h2>
       <ul id="missed-cities">
         <li v-for="(city, index) in missedCities" :key="index">
-          {{ city.city }} ({{ formatNumber(city.populatio) }} mieszkańców)
+          {{ city.city }} ({{ formatNumber(city.population) }} mieszkańców)
         </li>
       </ul>
       <button @click="restartGame">Zagraj ponownie</button>
@@ -89,7 +89,10 @@ export default {
       totalPolandPopulation: 38386000,
       showEndScreen: false,
       missedCities: [],
-      errorMessage: ''
+      errorMessage: '',
+      enterKeyListener: null,
+      resizeListener: null,
+      autoSaveInterval: null,
     }
   },
   computed: {
@@ -97,7 +100,7 @@ export default {
       return this.foundCities.length;
     },
     totalPopulation() {
-      return this.foundCities.reduce((sum, city) => sum + city.populatio, 0);
+      return this.foundCities.reduce((sum, city) => sum + (city.population || city.populatio || 0), 0);
     },
     populationPercent() {
       return ((this.totalPopulation / this.totalPolandPopulation) * 100).toFixed(2);
@@ -108,79 +111,63 @@ export default {
       this.isDarkMode = !this.isDarkMode;
       localStorage.setItem('theme', this.isDarkMode ? 'dark' : 'light');
     },
-    
-    // Pobieranie danych z API Laravela
     async fetchAllCities() {
       try {
-        const response = await axios.get('/api/cities');
+        const response = await axios.get('/cities');
         this.allCities = response.data;
       } catch (error) {
-          console.error('Błąd pobierania miast:', error);
+        this.errorMessage = `Błąd pobierania miast: ${error.message}`;
       }
     },
-    
     async findCity(cityName) {
       try {
-        const response = await axios.get(`/api/cities/${encodeURIComponent(cityName)}`);
+        const response = await axios.get(`/cities/${encodeURIComponent(cityName)}`);
         return response.data;
       } catch (error) {
         if (error.response && error.response.status === 404) {
-          // Miasto nie znalezione - to jest normalny przypadek
           return null;
         }
         this.errorMessage = `Błąd wyszukiwania miasta: ${error.message}`;
-        console.error('Błąd wyszukiwania miasta:', error);
         return null;
       }
     },
-    
     async checkCity() {
       if (!this.cityInput.trim()) return;
-      
-      // Sprawdź czy miasto już zostało znalezione
       const alreadyFound = this.foundCities.some(
         city => city.city.toLowerCase() === this.cityInput.trim().toLowerCase()
       );
-      
       if (alreadyFound) {
         this.cityInput = '';
         return;
       }
-      
       const city = await this.findCity(this.cityInput.trim());
-      
       if (city) {
         this.foundCities.push(city);
         this.cityInput = '';
+        this.errorMessage = '';
+      } else {
+        this.errorMessage = `Nie znaleziono miasta: ${this.cityInput}`;
       }
     },
-    
-    // Konwersja współrzędnych geograficznych na współrzędne mapy
     geoToMapCoords(lat, lon) {
       const map = document.getElementById('map');
-      if (!map) return { x: 0, y: 0 }; // zabezpieczenie
-      
+      if (!map) return { x: 0, y: 0 };
       const mapWidth = map.offsetWidth;
       const mapHeight = map.offsetHeight;
-      
       const minLat = 49.0;
       const maxLat = 54.9;
       const minLon = 14.1;
       const maxLon = 24.2;
-
       const latScale = (lat - minLat) / (maxLat - minLat);
       const lonScale = (lon - minLon) / (maxLon - minLon);
-
       const x = lonScale * mapWidth;
       const y = (1 - latScale) * mapHeight;
-
       return { x, y };
     },
-    
     getDotStyle(city) {
       const { x, y } = this.geoToMapCoords(city.lat, city.lng);
-      const dotSize = Math.max(10, Math.min(24, city.populatio / 40000));
-      
+      const population = city.population || city.populatio || 0;
+      const dotSize = Math.max(10, Math.min(24, population / 40000));
       return {
         width: `${dotSize}px`,
         height: `${dotSize}px`,
@@ -189,82 +176,65 @@ export default {
         zIndex: `${1000 - Math.round(dotSize)}`
       };
     },
-    
     showTooltip(event, city) {
-      this.tooltip.text = `${city.city} – ${this.formatNumber(city.populatio)} mieszkańców`;
+      const population = city.population || city.populatio || 0;
+      this.tooltip.text = `${city.city} – ${this.formatNumber(population)} mieszkańców`;
       this.tooltip.x = event.pageX + 10;
       this.tooltip.y = event.pageY - 30;
       this.tooltip.visible = true;
     },
-    
     hideTooltip() {
       this.tooltip.visible = false;
     },
-    
     getCityWordForm(count) {
       const lastDigit = count % 10;
       const lastTwoDigits = count % 100;
-
       if (count === 1) return 'miasto';
       if (lastDigit >= 2 && lastDigit <= 4 && !(lastTwoDigits >= 12 && lastTwoDigits <= 14)) {
         return 'miasta';
       }
       return 'miast';
     },
-    
     formatNumber(number) {
       return number.toLocaleString();
     },
-    
     clearGame() {
       this.foundCities = [];
       this.showEndScreen = false;
+      this.errorMessage = '';
     },
-    
     finishGame() {
-      // Oblicz miasta, których nie odgadliśmy
       this.missedCities = this.allCities.filter(city => 
         !this.foundCities.some(foundCity => 
           foundCity.city.toLowerCase() === city.city.toLowerCase()
         )
       );
       this.showEndScreen = true;
-      
-      // Jeśli chcemy zapisać wynik, możemy to zrobić tutaj
       this.saveGameResult();
     },
-    
     async saveGameResult() {
-      // Pomiń zapisywanie, jeśli nie ma znalezionych miast
       if (this.foundCities.length === 0) return;
-      
       try {
         const playerName = localStorage.getItem('playerName') || 'Anonimowy';
-        
         const result = {
           playerName: playerName,
           foundCities: this.cityCount,
           totalPopulation: this.totalPopulation,
-          score: Math.round(this.totalPopulation / 10000) // Przykładowy sposób obliczania wyniku
+          score: Math.round(this.totalPopulation / 10000)
         };
-        
         await axios.post('/api/game-results', result);
       } catch (error) {
         console.error('Błąd podczas zapisywania wyniku:', error);
       }
     },
-    
     restartGame() {
       this.clearGame();
       this.fetchAllCities();
+      this.showEndScreen = false;
     },
-    
-    // Zapisywanie wyników gry w localStorage
     saveGameState() {
       localStorage.setItem('quizPolska_foundCities', JSON.stringify(this.foundCities));
     },
-    
-    // Wczytywanie zapisanego stanu gry
     loadGameState() {
       const savedCities = localStorage.getItem('quizPolska_foundCities');
       if (savedCities) {
@@ -273,33 +243,50 @@ export default {
     }
   },
   mounted() {
-    // Ładowanie zapisanego motywu
+    // Wczytanie motywu
     const savedTheme = localStorage.getItem('theme') || 'light';
     this.isDarkMode = savedTheme === 'dark';
-    
-    // Pobierz wszystkie miasta przy uruchomieniu
+
+    // Pobranie miast
     this.fetchAllCities();
-    
-    // Wczytaj zapisany stan gry
+
+    // Wczytanie stanu gry
     this.loadGameState();
-    
-    // Zapisuj stan gry co 30 sekund
+
+    // Event listener dla Enter (definiujemy funkcję raz)
+    this.enterKeyListener = (e) => {
+      if (e.key === 'Enter') {
+        this.checkCity();
+      }
+    };
+    document.addEventListener('keypress', this.enterKeyListener);
+
+    // Event listener dla resize
+    this.resizeListener = () => this.$forceUpdate();
+    window.addEventListener('resize', this.resizeListener);
+
+    // Automatyczne zapisywanie stanu gry co 30 sekund
     this.autoSaveInterval = setInterval(() => {
       this.saveGameState();
     }, 30000);
-    
-    // Obsługa zmiany rozmiaru okna
-    window.addEventListener('resize', () => this.$forceUpdate());
   },
   beforeUnmount() {
-    window.removeEventListener('resize', () => this.$forceUpdate());
-    clearInterval(this.autoSaveInterval);
-    this.saveGameState(); // Zapisz stan przy zamknięciu
-  }
+    // Usuwanie event listenerów
+    if (this.enterKeyListener) {
+      document.removeEventListener('keypress', this.enterKeyListener);
+    }
+    if (this.resizeListener) {
+      window.removeEventListener('resize', this.resizeListener);
+    }
+    clearInterval(this.autoSaveInterval
+
+);
 }
+};
 </script>
 
 <style>
+/* Style pozostają bez zmian */
 /* Reset CSS dla usunięcia białego paska */
 * {
   margin: 0;
